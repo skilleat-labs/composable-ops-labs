@@ -62,4 +62,5 @@
 
 ## 다음 단계
 
-[제출 가이드 보기 :material-arrow-right:](submission-guide.md){ .md-button .md-button--primary }
+[미니 프로젝트 평가 :material-arrow-right:](mini-project.md){ .md-button .md-button--primary }
+[제출 가이드 보기 :material-arrow-right:](submission-guide.md){ .md-button }

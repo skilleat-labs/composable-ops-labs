@@ -107,6 +107,7 @@ nav:
       - Phase 7 개요: phase-7/index.md
   - 평가:
     - 평가 개요: evaluation/index.md
+    - 미니 프로젝트 평가: evaluation/mini-project.md
     - 제출 가이드: evaluation/submission-guide.md
   - 참고 자료:
     - 자주 만나는 오류: reference/common-errors.md
