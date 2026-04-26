@@ -1,0 +1,113 @@
+site_name: 한밭푸드 시즌 2 · 운영의 계절
+site_description: Composable Architecture 운영 자동화 및 고도화 · 15시간 강의 실습 가이드
+site_author: Skilleat
+site_url: https://skilleat-labs.github.io/composable-ops-labs/
+copyright: Copyright © 2026 Skilleat · 본 자료는 교육 목적으로만 사용 가능
+
+repo_name: skilleat-labs/composable-ops-labs
+repo_url: https://github.com/skilleat-labs/composable-ops-labs
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: ko
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 다크 모드로 전환
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 라이트 모드로 전환
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - 시작하기: index.md
+  - 개요:
+    - 시즌 2 시나리오: scenario/index.md
+    - AS-IS vs TO-BE 아키텍처: scenario/architecture.md
+    - 15시간 커리큘럼: curriculum/index.md
+  - 실습:
+    - Phase 0 · 복귀:
+      - Phase 0 개요: phase-0/index.md
+      - 환경 세팅: phase-0/environment-setup.md
+    - Phase 1 · 연쇄 장애의 밤:
+      - Phase 1 개요: phase-1/index.md
+      - 1-1 코드로 보는 호출 구조: phase-1/rest-call-structure.md
+      - 1-2 장애 전파 체험: phase-1/cascade-failure.md
+    - Phase 2 · 복원력 실험실:
+      - Phase 2 개요: phase-2/index.md
+      - 2-1 Retry의 효과와 역효과: phase-2/retry-and-storm.md
+      - 2-2 Circuit Breaker 적용: phase-2/circuit-breaker.md
+    - Phase 3 · 사람 손 떼기 (1부):
+      - Phase 3 개요: phase-3/index.md
+      - 3-1 CI/CD 개념: phase-3/cicd-concept.md
+      - 3-2 GitHub Actions 기초: phase-3/actions-basics.md
+      - 3-3 ACR 빌드 및 이미지 푸시: phase-3/acr-push.md
+      - 3-4 매니페스트 태그 자동 업데이트: phase-3/manifest-update.md
+    - Phase 4 · 사람 손 떼기 (2부):
+      - Phase 4 개요: phase-4/index.md
+      - 4-1 AKS 생성 및 ArgoCD 설치: phase-4/argocd-install.md
+      - 4-2 ArgoCD Application 등록: phase-4/application-register.md
+      - 4-3 GitOps 자동 배포 체험: phase-4/gitops-experience.md
+    - Phase 5 · Agent란 무엇인가:
+      - Phase 5 개요: phase-5/index.md
+      - 5-1 LLM vs Agent: phase-5/llm-vs-agent.md
+      - 5-2 Azure OpenAI 기본 호출: phase-5/aoai-basics.md
+      - 5-3 Tool Calling으로 Agent 만들기: phase-5/tool-calling.md
+    - Phase 6 · 운영팀의 새 멤버:
+      - Phase 6 개요: phase-6/index.md
+      - 6-1 Multi-Agent 설계 패턴: phase-6/multi-agent-patterns.md
+      - 6-2 미니 프로젝트: phase-6/mini-project.md
+    - Phase 7 · 회고와 제안서:
+      - Phase 7 개요: phase-7/index.md
+  - 평가:
+    - 평가 개요: evaluation/index.md
+    - 제출 가이드: evaluation/submission-guide.md
+  - 참고 자료:
+    - 자주 만나는 오류: reference/common-errors.md
+    - 유용한 명령어 모음: reference/useful-commands.md
