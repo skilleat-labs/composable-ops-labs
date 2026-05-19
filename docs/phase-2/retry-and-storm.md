@@ -178,38 +178,99 @@ payment-api만 재시작합니다.
 
 ---
 
-## Step 3. Retry 적용 — phase2 브랜치로 전환
+## Step 3. Retry 직접 구현하기
 
-Retry + Timeout + Circuit Breaker가 적용된 코드로 전환합니다.
+Retry는 환경변수로 켜고 끄는 게 아닙니다. **order-api 코드 자체를 수정**해야 합니다.
+지금부터 Phase 1에서 문제였던 코드를 직접 고쳐봅니다.
 
-!!! note "브랜치 전환이 필요한 이유"
-    Retry는 코드 수준에서 구현됩니다. 환경변수가 아니라 order-api 코드 자체가 바뀌어야 합니다.
-    `phase2` 브랜치에는 아래 로직이 추가되어 있습니다:
+### 3-1. 현재 코드 확인
 
+Phase 1에서 봤던 문제의 코드입니다.
+
+```bash title="터미널"
+cd ~/hanbat-order-app-s2
+cat order-api/app.py
+```
+
+payment-api를 호출하는 부분을 찾습니다:
+
+```python title="order-api/app.py (현재 — 문제 있는 코드)"
+async with httpx.AsyncClient(timeout=None) as client:       # ← timeout 없음
+    resp = await client.get(f"{PAYMENT_API_URL}/api/payments/{order_id}")
+    payment = resp.json()
+```
+
+이 부분을 단계적으로 고쳐나갑니다.
+
+---
+
+### 3-2. tenacity 라이브러리 추가
+
+Retry를 직접 구현할 수도 있지만, `tenacity` 라이브러리를 쓰면 훨씬 간단합니다.
+
+```bash title="터미널"
+cat order-api/requirements.txt
+```
+
+`tenacity`가 없으면 추가합니다:
+
+```bash title="터미널"
+echo "tenacity" >> order-api/requirements.txt
+```
+
+---
+
+### 3-3. order-api/app.py 수정
+
+`order-api/app.py` 파일을 편집기로 열어서 아래 두 가지를 수정합니다.
+
+**① 파일 상단 import 추가**
+
+```python title="order-api/app.py — 상단에 추가"
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
+import httpx
+```
+
+**② payment-api 호출 부분 교체**
+
+기존 코드:
+
+```python title="order-api/app.py — 수정 전"
+async with httpx.AsyncClient(timeout=None) as client:
+    resp = await client.get(f"{PAYMENT_API_URL}/api/payments/{order_id}")
+    payment = resp.json()
+```
+
+아래 코드로 교체합니다:
+
+```python title="order-api/app.py — 수정 후"
+@retry(
+    stop=stop_after_attempt(3),           # 최대 3회 시도
+    wait=wait_fixed(0),                   # 재시도 간격 0초 (즉시 재시도)
+    retry=retry_if_exception_type(Exception)
+)
+async def fetch_payment(order_id: str):
+    async with httpx.AsyncClient(timeout=2.0) as client:   # ← timeout 2초 추가
+        resp = await client.get(f"{PAYMENT_API_URL}/api/payments/{order_id}")
+        if resp.status_code == 503:
+            raise Exception("payment-api 503")             # 503이면 재시도 트리거
+        return resp.json()
+
+payment = await fetch_payment(order_id)
+```
+
+!!! note "무엇이 바뀌었나?"
     ```text
-    payment-api 호출 실패 시:
-      → 최대 3회까지 재시도
-      → 각 호출은 2초 타임아웃
-      → 3회 모두 실패 시 에러 반환
+    timeout=None → timeout=2.0   : 2초 안에 응답 없으면 포기
+    retry 3회                    : 실패 시 최대 3번까지 다시 시도
+    503 → Exception              : 503 응답을 명시적 실패로 처리해 재시도 트리거
     ```
 
-=== "Windows (PowerShell)"
+---
 
-    ```powershell title="터미널 (Windows PowerShell)"
-    cd ~\hanbat-order-app-s2
-    git fetch origin
-    git checkout phase2
-    ```
+### 3-4. order-api 재빌드
 
-=== "Mac / Linux"
-
-    ```bash title="터미널"
-    cd ~/hanbat-order-app-s2
-    git fetch origin
-    git checkout phase2
-    ```
-
-코드가 바뀌었으니 order-api를 다시 빌드합니다.
+코드가 바뀌었으니 이미지를 새로 빌드합니다.
 
 === "Windows (PowerShell)"
 
@@ -222,6 +283,23 @@ Retry + Timeout + Circuit Breaker가 적용된 코드로 전환합니다.
     ```bash title="터미널 (새 창)"
     sudo docker compose up --build order-api -d
     ```
+
+빌드가 완료되면 단일 요청으로 동작을 확인합니다.
+
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    Invoke-RestMethod http://127.0.0.1:8082/api/orders/ORD-001
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    curl -s http://127.0.0.1:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
+    ```
+
+!!! success "✅ 확인 포인트"
+    정상 응답이 오면 코드 수정이 잘 적용된 겁니다.
 
 ---
 

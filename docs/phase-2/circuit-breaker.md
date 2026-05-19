@@ -368,16 +368,12 @@ environment:
 === "Windows (PowerShell)"
 
     ```powershell title="터미널 (Windows PowerShell)"
-    git fetch origin
-    git checkout main
     docker compose up --build order-api -d
     ```
 
 === "Mac / Linux"
 
     ```bash title="터미널"
-    git fetch origin
-    git checkout main
     sudo docker compose up --build order-api -d
     ```
 
