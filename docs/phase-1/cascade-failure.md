@@ -179,22 +179,10 @@ Percentage of the requests served within a certain time (ms)
 
 ## Step 5. 주문 조회 화면도 확인
 
-!!! warning "사전 준비 — Azure NSG 포트 오픈"
-    브라우저에서 접속하려면 Azure Portal에서 3000 포트를 열어야 합니다.
-
-    **Azure Portal → VM → 네트워킹 → 인바운드 포트 규칙 추가**
-
-    | 항목 | 값 |
-    | --- | --- |
-    | 대상 포트 범위 | **3000** |
-    | 프로토콜 | TCP |
-    | 작업 | 허용 |
-    | 이름 | allow-order-web |
-
-로컬 PC 브라우저에서 VM 공인 IP로 접속합니다.
+브라우저에서 아래 주소로 접속합니다.
 
 ```
-http://<VM_공인_IP>:3000
+http://127.0.0.1:3000
 ```
 
 결제 API가 느려진 상태에서 주문 내역 화면이 어떻게 되는지 직접 확인합니다.
