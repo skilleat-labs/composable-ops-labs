@@ -15,7 +15,7 @@
 앱이 아직 실행 중이어야 합니다. (안 돼 있으면 `sudo docker compose up --build`)
 
 ```bash title="터미널"
-curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool
+curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
 ```
 
 ```json title="출력 예시"
@@ -62,7 +62,7 @@ sudo docker compose up --build payment-api -d
 ## Step 3. 단일 요청 — 얼마나 느려졌나?
 
 ```bash title="터미널"
-curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool
+curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
 ```
 
 ```text title="출력 예시"

@@ -48,7 +48,7 @@ sudo docker compose up --build payment-api -d
 
 ```bash title="터미널"
 for i in {1..5}; do
-  curl -s http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool
+  curl -s http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
   echo "---"
 done
 ```
@@ -90,7 +90,7 @@ sudo docker compose up --build order-api -d
 
 ```bash title="터미널"
 for i in {1..5}; do
-  curl -s http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool
+  curl -s http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
   echo "---"
 done
 ```

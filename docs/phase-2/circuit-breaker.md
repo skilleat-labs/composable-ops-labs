@@ -46,7 +46,7 @@ Phase 2-1에서 `FAULT_DELAY_MS=3000`으로 설정한 상태입니다.
 (설정이 바뀌었다면 다시 맞춰주세요.)
 
 ```bash title="터미널"
-curl -s http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool
+curl -s http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
 ```
 
 ```json title="출력 예시 — Circuit Breaker 동작 전"
@@ -87,7 +87,7 @@ done
 Fallback 응답 내용을 확인합니다.
 
 ```bash title="터미널"
-curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool
+curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
 ```
 
 ```json title="출력 예시 — Circuit Breaker Open 상태 Fallback 응답"
@@ -147,7 +147,7 @@ sudo docker compose up --build payment-api -d
 
 ```bash title="터미널"
 sleep 11
-curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool
+curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
 ```
 
 ```json title="출력 예시 — 복구 후"

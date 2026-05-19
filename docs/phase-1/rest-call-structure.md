@@ -66,7 +66,7 @@ order-api    | INFO:     Application startup complete.
 **새 터미널을 열고** 주문을 조회해봅니다:
 
 ```bash title="터미널 (새 창)"
-curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool
+curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
 ```
 
 ```json title="출력 예시"
