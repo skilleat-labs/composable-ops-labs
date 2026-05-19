@@ -17,13 +17,13 @@
 === "Windows (PowerShell)"
 
     ```powershell title="터미널 (Windows PowerShell)"
-    Invoke-RestMethod http://localhost:8082/api/orders/ORD-001
+    Invoke-RestMethod http://127.0.0.1:8082/api/orders/ORD-001
     ```
 
 === "Mac / Linux"
 
     ```bash title="터미널"
-    curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
+    curl http://127.0.0.1:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
     ```
 
 ```json title="출력 예시"
@@ -88,13 +88,13 @@ payment-api만 재시작합니다. **새 터미널을 열고** 아래 명령을 
 === "Windows (PowerShell)"
 
     ```powershell title="터미널 (Windows PowerShell)"
-    Invoke-RestMethod http://localhost:8082/api/orders/ORD-001
+    Invoke-RestMethod http://127.0.0.1:8082/api/orders/ORD-001
     ```
 
 === "Mac / Linux"
 
     ```bash title="터미널"
-    curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
+    curl http://127.0.0.1:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
     ```
 
 ```text title="출력 예시"
@@ -116,13 +116,16 @@ payment-api만 재시작합니다. **새 터미널을 열고** 아래 명령을 
 
 부하 테스트 도구를 설치합니다.
 
+`ab`(Apache Bench)는 웹 서버에 대량 요청을 보내 응답 시간과 처리량을 측정하는 도구입니다.
+`-c`는 동시 연결 수, `-n`은 총 요청 수, `-s`는 소켓 타임아웃(초)입니다.
+
 === "Windows (PowerShell)"
 
     PowerShell에서는 별도 설치 없이 반복 요청을 보낼 수 있습니다.
 
     ```powershell title="터미널 (Windows PowerShell)"
-    1..60 | ForEach-Object -ThrottleLimit 30 -Parallel {
-        Invoke-RestMethod http://localhost:8082/api/orders/ORD-001 | Out-Null
+    1..20 | ForEach-Object -ThrottleLimit 5 -Parallel {
+        Invoke-RestMethod http://127.0.0.1:8082/api/orders/ORD-001 | Out-Null
     }
     Write-Host "완료"
     ```
@@ -133,7 +136,7 @@ payment-api만 재시작합니다. **새 터미널을 열고** 아래 명령을 
     sudo apt-get install -y apache2-utils
     ```
 
-동시 30개 요청을 총 60개 보냅니다.
+동시 5개 요청을 총 20개 보냅니다.
 
 === "Windows (PowerShell)"
 
@@ -142,19 +145,23 @@ payment-api만 재시작합니다. **새 터미널을 열고** 아래 명령을 
 === "Mac / Linux"
 
     ```bash title="터미널"
-    ab -c 30 -n 60 http://localhost:8082/api/orders/ORD-001
+    ab -c 5 -n 20 -s 60 http://127.0.0.1:8082/api/orders/ORD-001
     ```
 
+!!! tip "`localhost` 대신 `127.0.0.1`을 쓰는 이유"
+    `localhost`는 시스템에 따라 IPv6(`::1`)로 해석될 수 있습니다.
+    Docker는 IPv4만 열려있는 경우가 많아 연결이 실패합니다.
+    `127.0.0.1`로 명시하면 IPv4로 확실히 연결됩니다.
+
 ```text title="출력 예시 (Mac / Linux)"
-Concurrency Level:      30
-Time taken for tests:   16.325 secs
-Complete requests:      60
+Concurrency Level:      5
+Time taken for tests:   40.249 seconds
+Complete requests:      20
 Failed requests:        0
 
 Percentage of the requests served within a certain time (ms)
-  50%   8011
-  75%   8015
-  100%  8023 (longest request)   ← 전부 8초씩 걸림
+  50%   8052
+  100%  8055 (longest request)   ← 전부 8초씩 걸림
 ```
 
 !!! danger "이게 지난 목요일에 일어난 일"
