@@ -1,6 +1,6 @@
 # Probe 2 · Readiness Probe
 
-!!! info "예상 소요 15분"
+!!! info "예상 소요 30분"
 
 ---
 
@@ -23,13 +23,13 @@ Pod가 `Running` 상태여도 다음 상황에서는 트래픽을 보내면 안 
 
 ### Liveness와의 결정적 차이
 
-```
+```text
 Liveness 실패  →  컨테이너 재시작
 Readiness 실패 →  Service Endpoint에서 제거 (재시작 없음)
 ```
 
 Pod는 살아있지만 Service가 해당 Pod로 트래픽을 보내지 않습니다.
-준비가 되면 자동으로 Endpoint에 다시 추가됩니다.
+준비가 되면 **자동으로 Endpoint에 다시 추가**됩니다.
 
 ### 동작 구조
 
@@ -40,7 +40,25 @@ Pod는 살아있지만 Service가 해당 Pod로 트래픽을 보내지 않습니
 ```
 
 Readiness가 실패한 Pod C는 Service의 Endpoint 목록에서 빠집니다.
-롤링 업데이트 중 새 Pod가 완전히 준비되기 전까지 구 Pod로만 트래픽이 가는 것도 이 원리입니다.
+준비가 완료되면 자동으로 다시 추가됩니다.
+
+### 롤링 업데이트와 Readiness의 관계
+
+Readiness Probe가 운영에서 가장 빛나는 순간은 **배포(롤링 업데이트)** 중입니다.
+
+```text title="Readiness 있을 때 롤링 업데이트"
+[구 Pod A]  READY 1/1  ──▶ 트래픽 처리 중
+[구 Pod B]  READY 1/1  ──▶ 트래픽 처리 중
+                             ↓ 배포 시작
+[신 Pod C]  READY 0/1  (초기화 중 — 트래픽 안 받음)
+[구 Pod A]  READY 1/1  ──▶ 여전히 트래픽 처리
+[구 Pod B]  READY 1/1  ──▶ 여전히 트래픽 처리
+                             ↓ 신 Pod C Ready!
+[신 Pod C]  READY 1/1  ──▶ 트래픽 처리 시작
+[구 Pod A]  삭제 시작...
+```
+
+Readiness가 없다면 초기화 중인 새 Pod에 트래픽이 바로 가서 오류가 발생합니다.
 
 ---
 
@@ -123,6 +141,150 @@ kubectl get endpoints readiness-svc
 !!! note "Liveness와 비교"
     Liveness였다면 Pod가 재시작됩니다.
     Readiness는 Pod를 재시작하지 않고, Service에서만 잠깐 빼놓습니다.
+    (단, nginx 프로세스가 종료되면 컨테이너 자체가 재시작될 수 있습니다.)
+
+---
+
+### Step 3. Readiness 회복 → Endpoint 자동 복귀
+
+실패와 회복을 직접 제어하기 위해 **파일 기반 exec Probe** Pod를 사용합니다.
+파일을 지우면 실패, 다시 만들면 회복 — 이렇게 Readiness 상태를 자유롭게 조작할 수 있습니다.
+
+```yaml title="pod-readiness-exec.yaml"
+apiVersion: v1
+kind: Pod
+metadata:
+  name: readiness-exec
+  labels:
+    app: readiness-exec
+spec:
+  containers:
+    - name: app
+      image: busybox:1.36-musl
+      command:
+        - sh
+        - -c
+        - "touch /tmp/ready && sleep 3600"
+      readinessProbe:
+        exec:
+          command:
+            - cat
+            - /tmp/ready
+        initialDelaySeconds: 3
+        periodSeconds: 3
+        failureThreshold: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: readiness-exec-svc
+spec:
+  selector:
+    app: readiness-exec
+  ports:
+    - port: 80
+      targetPort: 80
+```
+
+```bash title="터미널"
+kubectl apply -f pod-readiness-exec.yaml
+kubectl get pod readiness-exec
+kubectl get endpoints readiness-exec-svc
+```
+
+!!! success "✅ 확인 포인트"
+    `READY 1/1`, Endpoint에 IP 1개 확인.
+
+**Readiness 실패시키기 — 파일 삭제**
+
+```bash title="터미널"
+kubectl exec readiness-exec -- rm /tmp/ready
+kubectl get pod readiness-exec -w
+```
+
+```text title="출력 예시"
+NAME              READY   STATUS    RESTARTS   AGE
+readiness-exec    1/1     Running   0          30s
+readiness-exec    0/1     Running   0          36s   ← Readiness 실패
+```
+
+```bash title="터미널"
+kubectl get endpoints readiness-exec-svc
+```
+
+```text title="출력 예시 — Endpoint에서 제거됨"
+NAME                  ENDPOINTS   AGE
+readiness-exec-svc    <none>      40s
+```
+
+**Readiness 회복시키기 — 파일 복구**
+
+```bash title="터미널"
+kubectl exec readiness-exec -- touch /tmp/ready
+kubectl get pod readiness-exec -w
+```
+
+```text title="출력 예시"
+NAME              READY   STATUS    RESTARTS   AGE
+readiness-exec    0/1     Running   0          50s
+readiness-exec    1/1     Running   0          53s   ← 자동 회복!
+```
+
+```bash title="터미널"
+kubectl get endpoints readiness-exec-svc
+```
+
+!!! success "✅ 확인 포인트"
+    Endpoint에 IP가 다시 나타나면 OK.
+    **수동 개입 없이 자동으로 복귀**되는 것이 핵심입니다.
+
+---
+
+### Step 4. 롤링 업데이트 보호 체험
+
+Readiness Probe가 있을 때 배포 중 트래픽이 끊기지 않는지 직접 확인합니다.
+
+**이미지 업데이트 실행 (터미널 2개 준비)**
+
+```bash title="터미널 1 — Pod 상태 감시"
+kubectl get pods -l app=readiness-app -w
+```
+
+```bash title="터미널 2 — 이미지 버전 업데이트"
+kubectl set image deployment/readiness-app app=nginx:1.24
+```
+
+```text title="출력 예시 — 터미널 1"
+NAME                            READY   STATUS              RESTARTS
+readiness-app-old-xxx           1/1     Running             0
+readiness-app-old-yyy           1/1     Running             0
+readiness-app-old-zzz           1/1     Running             0
+readiness-app-new-aaa           0/1     ContainerCreating   0   ← 새 Pod 생성
+readiness-app-new-aaa           0/1     Running             0   ← 초기화 중, 아직 트래픽 안 받음
+readiness-app-new-aaa           1/1     Running             0   ← Ready! 이제 트래픽 받음
+readiness-app-old-xxx           1/1     Terminating         0   ← 그 다음 구 Pod 종료
+```
+
+!!! success "✅ 확인 포인트"
+    새 Pod가 `READY 1/1`이 된 **이후**에 구 Pod가 `Terminating`으로 바뀝니다.
+    Readiness Probe 덕분에 배포 중에도 항상 최소 2개 Pod가 트래픽을 처리합니다.
+
+롤아웃 상태도 확인합니다:
+
+```bash title="터미널"
+kubectl rollout status deployment/readiness-app
+```
+
+```text title="출력 예시"
+Waiting for deployment "readiness-app" rollout to finish: 1 out of 3 new replicas have been updated...
+Waiting for deployment "readiness-app" rollout to finish: 2 out of 3 new replicas have been updated...
+deployment "readiness-app" successfully rolled out
+```
+
+!!! tip "Readiness가 없으면 어떻게 될까?"
+    새 Pod가 `Running`이 되는 즉시 Service Endpoint에 추가됩니다.
+    초기화 중인 Pod에 트래픽이 가서 500 에러가 발생할 수 있습니다.
+    **Readiness Probe는 무중단 배포의 핵심 조건입니다.**
 
 ---
 
@@ -130,14 +292,16 @@ kubectl get endpoints readiness-svc
 
 ```bash title="터미널"
 kubectl delete -f deploy-readiness.yaml
+kubectl delete -f pod-readiness-exec.yaml
 ```
 
 ### 트러블슈팅
 
 | 증상 | 확인 |
 |------|------|
-| Pod는 Running인데 READY=0/1 | Readiness 실패 — 앱이 아직 준비 안 됨, `kubectl describe pod` 확인 |
+| Pod는 Running인데 READY=0/1 | Readiness 실패 — `kubectl describe pod` → Events 확인 |
 | Endpoint에 Pod IP가 없음 | `kubectl get endpoints <svc이름>`으로 Readiness 상태 확인 |
+| 롤링 업데이트가 멈춤 | 새 Pod의 Readiness 실패 → `kubectl rollout status`로 상황 확인 후 `kubectl rollout undo` |
 
 ---
 
