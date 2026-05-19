@@ -123,20 +123,63 @@ async def get_order(order_id: str):
 
 ## Step 3. order-api가 혼자 처리할 수 없는 것 — 결제 정보
 
-주문 조회 응답에는 결제 정보(`payment`)도 포함됩니다. 그런데 order-api는 결제 정보를 갖고 있지 않습니다. 결제는 **payment-api가 관리**합니다.
+Step 1에서 받은 응답을 다시 보면, 주문 정보 안에 결제 정보(`payment`)가 같이 들어있습니다.
 
-그래서 order-api는 응답을 만들기 위해 payment-api에게 물어봐야 합니다:
-
-```python title="order-api/app.py"
-    # ② payment-api에게 결제 정보 요청
-    async with httpx.AsyncClient(timeout=None) as client:   # ⚠️ 여기!
-        resp = await client.get(f"{PAYMENT_API_URL}/api/payments/{order_id}")
-        payment = resp.json()
-
-    return {**order, "payment": payment}   # ③ 주문 + 결제 합쳐서 응답
+```json
+{
+  "order_id": "ORD-001",
+  "product_name": "유기농 쌀 10kg",   ← 주문 정보
+  "payment": {
+    "status": "승인완료",              ← 결제 정보
+    "method": "신용카드"
+  }
+}
 ```
 
-② 단계에서 order-api는 payment-api로 HTTP 요청을 날리고, **응답이 올 때까지 기다립니다.**
+그런데 order-api는 결제 정보를 갖고 있지 않습니다. 결제 정보는 **payment-api가 따로 관리**합니다. 그래서 order-api는 응답을 완성하려면 payment-api에게 직접 물어봐야 합니다.
+
+코드에서 그 부분을 찾아보면:
+
+```python title="order-api/app.py"
+    # 이렇게 payment-api에게 HTTP 요청을 보냅니다
+    async with httpx.AsyncClient(timeout=None) as client:
+        resp = await client.get(f"{PAYMENT_API_URL}/api/payments/{order_id}")
+        payment = resp.json()
+```
+
+한 줄씩 읽으면:
+
+```text
+httpx.AsyncClient(timeout=None)
+  → HTTP 요청을 보내는 도구를 준비한다
+  → timeout=None : 응답이 올 때까지 무한정 기다린다 ← ⚠️ 문제의 설정
+
+client.get(f"{PAYMENT_API_URL}/api/payments/{order_id}")
+  → payment-api에게 "ORD-001의 결제 정보 줘" 라고 요청한다
+  → 이 줄에서 order-api는 payment-api의 응답을 기다리며 멈춥니다
+
+resp.json()
+  → 돌아온 응답을 JSON으로 변환한다
+```
+
+payment-api의 응답이 오면, 주문 정보와 결제 정보를 합쳐서 최종 응답을 만듭니다:
+
+```python title="order-api/app.py"
+    return {**order, "payment": payment}
+    # {**order} → 주문 정보를 펼쳐놓고
+    # "payment": payment → 결제 정보를 옆에 붙인다
+    # 결과: 주문 + 결제가 합쳐진 JSON 하나
+```
+
+정리하면 order-api는 이런 순서로 동작합니다:
+
+```text
+① 내부에서 주문 정보 꺼내기          (빠름, 0ms)
+② payment-api에게 결제 정보 요청     (느릴 수 있음, 응답 올 때까지 대기)
+③ 주문 + 결제 합쳐서 응답 반환
+```
+
+② 단계에서 order-api는 payment-api의 응답을 기다리며 **완전히 멈춥니다.** `timeout=None` 이니까 1초든 1분이든 상관없이 기다립니다.
 
 그런데 `timeout=None` 이 붙어 있습니다.
 
