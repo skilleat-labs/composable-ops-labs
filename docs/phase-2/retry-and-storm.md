@@ -1,6 +1,6 @@
 # Phase 2-1 · Retry의 효과와 역효과
 
-!!! info "예상 소요 30분"
+!!! info "예상 소요 45분"
 
 ---
 
@@ -12,23 +12,54 @@
 
 ---
 
-## 개념 — 언제 Retry가 유효한가
+## 이론 — Retry는 언제 효과가 있나?
 
-Retry는 **일시적(transient) 장애**에만 효과가 있습니다.
+Retry(재시도)는 **일시적(transient) 장애**에만 효과가 있습니다.
+
+일시적 장애란 곧 사라지는 장애입니다. 잠깐 네트워크가 흔들렸거나, 서버가 순간적으로 503을 반환했지만 다음 요청은 잘 받는 경우입니다.
+
+```text
+일시적 장애 예시:
+  요청 1 → 503 (서버 순간 과부하)
+  요청 2 → 200 (금방 회복)  ← Retry하면 성공!
+
+지속 장애 예시:
+  요청 1 → 503 (PG사 응답 지연)
+  요청 2 → 503 (여전히 지연)  ← Retry해도 503
+  요청 3 → 503 (여전히 지연)  ← 요청만 3배로 늘어남
+```
 
 | 장애 유형 | 예시 | Retry 결과 |
 | --- | --- | --- |
 | **일시적** | 네트워크 순간 끊김, 간헐적 503 | ✅ 재시도하면 성공 가능 |
-| **지속적** | 서버 다운, 응답 지연 8초 | ❌ 재시도해도 같은 실패 → 요청만 3배로 증가 |
+| **지속적** | 서버 다운, 응답 지연 8초 | ❌ 재시도해도 같은 실패 → 요청만 3배 증가 |
 
 지난 목요일 사건은 PG사 **응답 지연(지속 장애)**이었습니다.
-Retry를 넣었다면 어떻게 됐을까요?
+Retry를 넣었다면 어떻게 됐을까요? 지금부터 직접 확인합니다.
 
 ---
 
-## Step 1. 간헐적 에러 주입
+## Step 1. FAULT_ERROR_RATE 이해하기
 
-먼저 **일시적 에러** 상황을 만들어봅니다.
+실습에 앞서 `FAULT_ERROR_RATE` 환경변수를 이해합니다.
+
+`FAULT_DELAY_MS`가 "응답을 N밀리초 늦게 준다"는 스위치였다면,
+`FAULT_ERROR_RATE`는 "요청의 N% 확률로 503 에러를 반환한다"는 스위치입니다.
+
+```text
+FAULT_ERROR_RATE: "0.0"  → 0% 에러, 모든 요청 정상 처리
+FAULT_ERROR_RATE: "0.7"  → 70% 확률로 503 반환, 30%만 성공
+FAULT_ERROR_RATE: "1.0"  → 100% 에러, 모든 요청 실패
+```
+
+이걸로 "간헐적으로 PG 게이트웨이가 503을 던지는 상황"을 재현합니다.
+
+---
+
+## Step 2. Retry 없는 상태에서 — 에러가 사용자에게 그대로 노출
+
+먼저 현재 코드(Retry 없음) 상태에서 간헐적 에러가 어떻게 보이는지 확인합니다.
+
 `docker-compose.yml`에서 `FAULT_ERROR_RATE`를 `0.7`로 바꿉니다.
 
 ```yaml title="docker-compose.yml (payment-api 환경변수 수정)"
@@ -37,98 +68,190 @@ environment:
   FAULT_ERROR_RATE: "0.7"   # "0.0" → "0.7" (70% 확률로 503 반환)
 ```
 
-payment-api를 재시작합니다.
+payment-api만 재시작합니다.
 
-```bash title="터미널 (새 창)"
-cd ~/hanbat-order-app-s2
-sudo docker compose up --build payment-api -d
-```
+=== "Windows (PowerShell)"
 
-현재 상태(Retry 없음)에서 요청해봅니다.
+    ```powershell title="터미널 (Windows PowerShell, 새 창)"
+    docker compose up payment-api -d
+    ```
 
-```bash title="터미널"
-for i in {1..5}; do
-  curl -s http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
-  echo "---"
-done
-```
+=== "Mac / Linux"
+
+    ```bash title="터미널 (새 창)"
+    sudo docker compose up payment-api -d
+    ```
+
+이제 요청을 5번 연속으로 보냅니다.
+
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    1..5 | ForEach-Object {
+        Write-Host "--- 요청 $_ ---"
+        Invoke-RestMethod http://127.0.0.1:8082/api/orders/ORD-001
+    }
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    for i in {1..5}; do
+      echo "--- 요청 $i ---"
+      curl -s http://127.0.0.1:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
+    done
+    ```
 
 ```text title="출력 예시 — Retry 없는 상태"
-{"detail":{"error":"PG_GATEWAY_UNAVAILABLE", ...}}   ← 실패 (503 그대로 전달)
----
-{"order_id":"ORD-001", "payment":{...}}               ← 성공
----
-{"detail":{"error":"PG_GATEWAY_UNAVAILABLE", ...}}   ← 실패
----
+--- 요청 1 ---
+{"detail": {"error": "PG_GATEWAY_UNAVAILABLE", ...}}   ← 실패 (503 그대로 전달)
+--- 요청 2 ---
+{"order_id": "ORD-001", "payment": {...}}              ← 성공
+--- 요청 3 ---
+{"detail": {"error": "PG_GATEWAY_UNAVAILABLE", ...}}   ← 실패
+--- 요청 4 ---
+{"detail": {"error": "PG_GATEWAY_UNAVAILABLE", ...}}   ← 실패
+--- 요청 5 ---
+{"order_id": "ORD-001", "payment": {...}}              ← 성공
 ```
 
-70%는 실패. 일시적 에러인데도 사용자에게 에러가 그대로 노출됩니다.
-
----
-
-## Step 2. Retry 적용 — phase2 브랜치로 전환
-
-Retry + Timeout + Circuit Breaker가 모두 적용된 코드로 전환합니다.
-
-```bash title="터미널"
-cd ~/hanbat-order-app-s2
-git fetch origin
-git checkout phase2
-```
-
-order-api를 재빌드합니다.
-
-```bash title="터미널 (새 창)"
-sudo docker compose up --build order-api -d
-```
-
----
-
-## Step 3. Retry 효과 확인 — 간헐적 503
-
-`FAULT_ERROR_RATE=0.7` 상태에서 다시 요청해봅니다.
-
-```bash title="터미널"
-for i in {1..5}; do
-  curl -s http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
-  echo "---"
-done
-```
-
-```text title="출력 예시 — Retry 적용 후"
-{"order_id":"ORD-001", "payment":{...}}   ← 성공
----
-{"order_id":"ORD-001", "payment":{...}}   ← 성공
----
-{"order_id":"ORD-001", "payment":{...}}   ← 성공
----
-```
-
-성공률이 크게 올라갔습니다. payment-api 로그를 보면 재시도 흔적이 보입니다.
-
-```bash title="터미널"
-sudo docker compose logs payment-api | tail -20
-```
-
-```text title="출력 예시"
-payment-api  | INFO: ... "GET /api/payments/ORD-001 HTTP/1.1" 503
-payment-api  | INFO: ... "GET /api/payments/ORD-001 HTTP/1.1" 503
-payment-api  | INFO: ... "GET /api/payments/ORD-001 HTTP/1.1" 200   ← 3번째 시도에서 성공
-```
-
-order-api는 요청 1번을 받았지만 payment-api에는 최대 3번을 호출했습니다.
-**Retry가 일시적 503을 흡수하고 있습니다.**
+5번 중 2번만 성공했습니다. payment-api가 간헐적으로 503을 던지고 있고, order-api는 그걸 그대로 사용자에게 내보내고 있습니다. 재시도가 없으니 첫 번째 시도가 실패하면 그냥 에러입니다.
 
 !!! success "✅ 확인 포인트"
-    - 5번 요청 중 대부분이 성공으로 바뀌었다
+    5번 중 에러가 섞여 나오면 OK. 70% 확률이라 매번 다를 수 있습니다.
+
+---
+
+## Step 3. Retry 적용 — phase2 브랜치로 전환
+
+Retry + Timeout + Circuit Breaker가 적용된 코드로 전환합니다.
+
+!!! note "브랜치 전환이 필요한 이유"
+    Retry는 코드 수준에서 구현됩니다. 환경변수가 아니라 order-api 코드 자체가 바뀌어야 합니다.
+    `phase2` 브랜치에는 아래 로직이 추가되어 있습니다:
+
+    ```text
+    payment-api 호출 실패 시:
+      → 최대 3회까지 재시도
+      → 각 호출은 2초 타임아웃
+      → 3회 모두 실패 시 에러 반환
+    ```
+
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    cd ~\hanbat-order-app-s2
+    git fetch origin
+    git checkout phase2
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    cd ~/hanbat-order-app-s2
+    git fetch origin
+    git checkout phase2
+    ```
+
+코드가 바뀌었으니 order-api를 다시 빌드합니다.
+
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell, 새 창)"
+    docker compose up --build order-api -d
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널 (새 창)"
+    sudo docker compose up --build order-api -d
+    ```
+
+---
+
+## Step 4. Retry 효과 확인 — 간헐적 503 흡수
+
+`FAULT_ERROR_RATE=0.7` 상태를 유지한 채로 다시 요청합니다.
+
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    1..5 | ForEach-Object {
+        Write-Host "--- 요청 $_ ---"
+        Invoke-RestMethod http://127.0.0.1:8082/api/orders/ORD-001
+    }
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    for i in {1..5}; do
+      echo "--- 요청 $i ---"
+      curl -s http://127.0.0.1:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
+    done
+    ```
+
+```text title="출력 예시 — Retry 적용 후"
+--- 요청 1 ---
+{"order_id": "ORD-001", "payment": {...}}   ← 성공
+--- 요청 2 ---
+{"order_id": "ORD-001", "payment": {...}}   ← 성공
+--- 요청 3 ---
+{"order_id": "ORD-001", "payment": {...}}   ← 성공
+--- 요청 4 ---
+{"order_id": "ORD-001", "payment": {...}}   ← 성공
+--- 요청 5 ---
+{"order_id": "ORD-001", "payment": {...}}   ← 성공
+```
+
+성공률이 크게 올라갔습니다. 사용자 입장에서는 에러가 사라진 것처럼 보입니다.
+
+그런데 **payment-api는 실제로 몇 번이나 호출됐을까요?** 로그를 확인합니다.
+
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    docker compose logs payment-api | Select-Object -Last 20
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    sudo docker compose logs payment-api | tail -20
+    ```
+
+```text title="출력 예시 — payment-api 로그"
+payment-api  | INFO: "GET /api/payments/ORD-001 HTTP/1.1" 503   ← 1번째 시도 실패
+payment-api  | INFO: "GET /api/payments/ORD-001 HTTP/1.1" 503   ← 2번째 시도 실패
+payment-api  | INFO: "GET /api/payments/ORD-001 HTTP/1.1" 200   ← 3번째 시도 성공!
+payment-api  | INFO: "GET /api/payments/ORD-001 HTTP/1.1" 200   ← 1번째 시도 성공
+payment-api  | INFO: "GET /api/payments/ORD-001 HTTP/1.1" 503
+payment-api  | INFO: "GET /api/payments/ORD-001 HTTP/1.1" 200
+...
+```
+
+order-api는 요청 1개를 받았지만 payment-api에는 **최대 3번**을 호출했습니다.
+Retry가 일시적 503을 흡수하고 있습니다.
+
+!!! success "✅ 확인 포인트"
+    - 사용자 응답은 대부분 성공으로 바뀌었다
     - payment-api 로그에서 503 → 503 → 200 순서의 재시도 흔적이 보인다
 
 ---
 
-## Step 4. Retry Storm — 지속 장애에서는?
+## Step 5. Retry Storm — 지속 장애에서 Retry는 독이 된다
 
-이제 **지속 장애**로 바꿔봅니다.
-`FAULT_DELAY_MS=3000` (3초 지연) → timeout 2초보다 길어서 **모든 요청이 Timeout**됩니다.
+이번엔 **지속 장애** 상황으로 바꿉니다.
+`FAULT_DELAY_MS=3000`으로 설정합니다. payment-api가 3초씩 늦게 응답합니다.
+
+```text
+왜 3초인가?
+  phase2 코드의 타임아웃: 2초
+  payment-api 응답 시간: 3초
+
+  → payment-api는 3초 후 응답하지만 order-api는 2초 만에 포기합니다.
+  → 모든 요청이 Timeout → Retry 3회 → 총 6초 걸린 후 실패
+```
 
 ```yaml title="docker-compose.yml (수정)"
 environment:
@@ -136,42 +259,91 @@ environment:
   FAULT_ERROR_RATE: "0.0"
 ```
 
-```bash title="터미널 (새 창)"
-sudo docker compose up --build payment-api -d
-```
+=== "Windows (PowerShell)"
 
-부하 테스트를 실행합니다.
+    ```powershell title="터미널 (Windows PowerShell, 새 창)"
+    docker compose up payment-api -d
+    ```
 
-```bash title="터미널"
-hey -c 10 -n 30 http://localhost:8082/api/orders/ORD-001
-```
+=== "Mac / Linux"
+
+    ```bash title="터미널 (새 창)"
+    sudo docker compose up payment-api -d
+    ```
+
+단일 요청으로 먼저 확인합니다.
+
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    $start = Get-Date
+    try { Invoke-RestMethod http://127.0.0.1:8082/api/orders/ORD-001 } catch { $_.Exception.Message }
+    Write-Host "소요: $(((Get-Date) - $start).TotalSeconds)초"
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    time curl -s http://127.0.0.1:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
+    ```
 
 ```text title="출력 예시"
-Summary:
-  Total:        66.12 secs
-  Slowest:       6.05 secs   ← 2초 대기 × 3회 시도 = 6초
-  Average:       6.03 secs
-
-Status code distribution:
-  [504] 30 responses   ← 전부 504 Timeout
+{"detail": {"error": "PAYMENT_API_TIMEOUT", ...}}
+소요: 6.03초   ← 2초 대기 × 3회 재시도 = 6초
 ```
 
-payment-api 로그를 확인합니다.
+한 번의 요청이 6초 걸립니다. 이제 동시 요청을 10개 보내봅니다.
 
-```bash title="터미널"
-sudo docker compose logs payment-api | tail -40
-```
+=== "Windows (PowerShell)"
 
-```text title="출력 예시"
-payment-api  | INFO: ... "GET /api/payments/ORD-001 HTTP/1.1" 200   ← 3초 후 응답, 이미 timeout
-payment-api  | INFO: ... "GET /api/payments/ORD-001 HTTP/1.1" 200
-payment-api  | INFO: ... "GET /api/payments/ORD-001 HTTP/1.1" 200
+    ```powershell title="터미널 (Windows PowerShell)"
+    1..10 | ForEach-Object -ThrottleLimit 10 -Parallel {
+        Invoke-WebRequest -Uri http://127.0.0.1:8082/api/orders/ORD-001 -SkipHttpErrorCheck | Out-Null
+    }
+    Write-Host "완료"
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    ab -c 10 -n 30 -s 60 http://127.0.0.1:8082/api/orders/ORD-001
+    ```
+
+부하 테스트가 끝나면 payment-api 로그를 확인합니다.
+
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    docker compose logs payment-api | Select-Object -Last 40
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    sudo docker compose logs payment-api | tail -40
+    ```
+
+```text title="출력 예시 — payment-api 로그"
+payment-api  | INFO: "GET /api/payments/ORD-001 HTTP/1.1" 200   ← 3초 후 응답, 이미 timeout
+payment-api  | INFO: "GET /api/payments/ORD-001 HTTP/1.1" 200
+payment-api  | INFO: "GET /api/payments/ORD-001 HTTP/1.1" 200
 ... (30개 요청 × 최대 3회 재시도 = 최대 90줄)
 ```
 
-!!! danger "Retry Storm"
-    order-api는 30개 요청을 보냈는데, payment-api에는 **최대 90개** 요청이 쏟아집니다.
-    이미 힘든 payment-api에 **3배의 부하**를 추가로 얹는 셈입니다.
+order-api에는 30개 요청이 왔는데, payment-api 로그에는 **최대 90줄**이 찍혔습니다.
+
+!!! danger "Retry Storm — 재시도 폭주"
+    이미 지연으로 힘든 payment-api에 **3배의 부하**가 추가로 쏟아집니다.
+
+    ```text
+    사용자 요청: 30개
+        ↓  (Retry 3회)
+    payment-api 실제 수신: 최대 90개
+
+    payment-api: "이미 응답 못 하고 있는데 요청이 3배가 됐어..."
+    ```
+
+    회복될 기회를 주기는커녕 숨통을 더 조이는 겁니다.
     이것이 **Retry Storm(재시도 폭주)**입니다.
 
 !!! quote "이대리"
@@ -183,13 +355,14 @@ payment-api  | INFO: ... "GET /api/payments/ORD-001 HTTP/1.1" 200
 
 | 상황 | Retry 결과 |
 | --- | --- |
-| 일시적 503 (FAULT_ERROR_RATE=0.7) | ✅ 재시도로 성공률 향상 |
-| 지속 지연 (FAULT_DELAY_MS=3000) | ❌ Retry Storm — 장애 서비스에 3배 부하 |
+| 일시적 503 (`FAULT_ERROR_RATE=0.7`) | ✅ 재시도로 성공률 향상 |
+| 지속 지연 (`FAULT_DELAY_MS=3000`) | ❌ Retry Storm — 장애 서비스에 3배 부하 |
 
 **Retry의 교훈**: 일시적 장애에만 유효. 지속 장애에는 Circuit Breaker가 필요합니다.
 
 !!! success "✅ 확인 포인트"
     - `FAULT_ERROR_RATE=0.7` 상황에서 Retry 후 성공률이 올라간 것을 확인했다
+    - payment-api 로그에서 한 사용자 요청에 여러 번 호출된 흔적을 확인했다
     - `FAULT_DELAY_MS=3000` 상황에서 payment-api 로그가 최대 3배로 증가한 것을 확인했다
 
 ---
