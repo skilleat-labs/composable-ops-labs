@@ -375,4 +375,4 @@ argocd version --client --short
 ## 다음 단계
 
 [:material-arrow-left: Phase 0 개요](index.md){ .md-button }
-[Phase 1 · 연쇄 장애의 밤 :material-arrow-right:](../phase-1/index.md){ .md-button .md-button--primary }
+[K8s 복기 1 · Probe :material-arrow-right:](probe.md){ .md-button .md-button--primary }
