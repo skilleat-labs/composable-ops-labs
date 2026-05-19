@@ -75,7 +75,9 @@ nav:
     - Phase 0 · 복귀:
       - Phase 0 개요: phase-0/index.md
       - 환경 세팅: phase-0/environment-setup.md
-      - K8s 1 · Probe: phase-0/probe.md
+      - Probe 1 · Liveness: phase-0/probe-liveness.md
+      - Probe 2 · Readiness: phase-0/probe-readiness.md
+      - Probe 3 · Startup: phase-0/probe-startup.md
       - K8s 2 · Resource & QoS: phase-0/resource-qos.md
       - K8s 3 · HPA: phase-0/hpa.md
     - Phase 1 · 연쇄 장애의 밤:

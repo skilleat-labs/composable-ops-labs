@@ -375,4 +375,4 @@ argocd version --client --short
 ## 다음 단계
 
 [:material-arrow-left: Phase 0 개요](index.md){ .md-button }
-[K8s 1 · Probe :material-arrow-right:](probe.md){ .md-button .md-button--primary }
+[Probe 1 · Liveness :material-arrow-right:](probe-liveness.md){ .md-button .md-button--primary }

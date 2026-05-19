@@ -233,5 +233,5 @@ limits    = 피크 사용량 + 20~30% 여유
 
 ## 다음 단계
 
-[:material-arrow-left: K8s 1 · Probe](probe.md){ .md-button }
+[:material-arrow-left: Probe 3 · Startup](probe-startup.md){ .md-button }
 [K8s 3 · HPA :material-arrow-right:](hpa.md){ .md-button .md-button--primary }
