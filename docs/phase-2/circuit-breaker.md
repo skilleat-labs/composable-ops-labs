@@ -607,18 +607,45 @@ environment:
     ```
 
 ```text title="출력 예시 — Phase 2 Circuit Breaker 적용 후"
-Status code distribution:
-  [504] 5 responses    ← Circuit Breaker가 Open되기 전 5개만 실패
-  [200] 25 responses   ← 나머지 25개는 Fallback으로 즉시 응답
+Concurrency Level:      10
+Time taken for tests:   14.3 seconds   ← Phase 1은 240초였음 (30개 × 8초)
+Complete requests:      30
+Failed requests:        19             ← ab 기준 "다름" (Fallback은 응답 길이가 달라서)
+Non-2xx responses:      11             ← 실제 504 에러 (CB 열리기 전 실패)
+
+Percentage of the requests served within a certain time (ms)
+  50%     10   ← 절반이 10ms 이하! Fallback 즉시 응답
+  66%   7100   ← 나머지는 7초 (CB 열리기 전 타임아웃)
+ 100%   7216
 ```
+
+!!! note "ab의 `Failed requests`는 에러가 아닙니다"
+    ab는 첫 번째 응답의 길이를 기준으로 삼습니다.
+    첫 응답이 504(63 bytes)였다면, 이후 200 Fallback 응답은 길이가 달라서 "Failed"로 표시됩니다.
+    실제로는 **정상 Fallback 응답**입니다. `Non-2xx responses: 11`이 진짜 에러 수입니다.
+
+!!! note "CB가 정확히 5개가 아니라 더 많이 실패하는 이유"
+    동시 요청 10개가 한꺼번에 출발하면, CB가 5번째 실패를 카운트하기 전에 나머지 요청들도 이미 실행 중입니다.
+    5번째 실패가 등록되는 시점에 CB가 열리지만, 이미 출발한 요청들은 멈추지 않고 그대로 타임아웃까지 기다립니다.
+
+    ```text
+    [동시 출발] 요청 1~10 → 모두 7초 대기 중
+                             5번째 완료 → CB Open!
+                             6~10번째도 이미 실행 중 → 그대로 실패
+    [다음 배치] 요청 11~20 → CB Open 상태 → 즉시 Fallback
+    [다음 배치] 요청 21~30 → CB Open 상태 → 즉시 Fallback
+    ```
+
+    실무에서도 동일합니다. CB는 in-process 상태이므로 동시 요청이 많을수록 열리기 전에 더 많은 요청이 실패할 수 있습니다.
 
 Phase 1과 비교해보면:
 
 | | Phase 1 (Timeout만) | Phase 2 (CB 추가) |
 | --- | --- | --- |
-| 30개 요청 결과 | 전부 8초씩 대기 후 실패 | 5개만 느리고 25개는 즉시 Fallback |
+| 30개 요청 결과 | 전부 8초씩 대기 후 실패 | 일부만 느리고 나머지는 즉시 Fallback |
+| 전체 소요 시간 | ~240초 | ~14초 |
 | 사용자 경험 | 8초 기다렸다 에러 | 즉시 "잠시 후 다시 시도" |
-| payment-api 부하 | 무한 요청 | 5회 이후 차단 |
+| payment-api 부하 | 무한 요청 | CB 열린 후 차단 |
 
 !!! quote "김팀장"
     *"지난 목요일에 이게 있었다면 44분이 아니라 5초 안에 Fast Fail로 전환됐을 거야."*
