@@ -14,9 +14,17 @@
 장애 전후를 비교하기 위해 먼저 정상 상태를 기록합니다.
 앱이 아직 실행 중이어야 합니다. (안 돼 있으면 `sudo docker compose up --build`)
 
-```bash title="터미널"
-curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
-```
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    Invoke-RestMethod http://localhost:8082/api/orders/ORD-001
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
+    ```
 
 ```json title="출력 예시"
 {
@@ -37,9 +45,17 @@ curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure
 
 `docker-compose.yml`을 열고 `FAULT_DELAY_MS` 값을 `"8000"` 으로 바꿉니다.
 
-```bash title="터미널"
-cd ~/hanbat-order-app-s2
-```
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    cd ~\hanbat-order-app-s2
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    cd ~/hanbat-order-app-s2
+    ```
 
 ```yaml title="docker-compose.yml (수정 전 → 후)"
 environment:
@@ -53,17 +69,33 @@ payment-api만 재시작합니다. **새 터미널을 열고** 아래 명령을 
     - **터미널 1**: `sudo docker compose up --build` 실행 중 (건드리지 마세요)
     - **터미널 2**: 아래 명령 실행 → payment-api만 백그라운드(`-d`)로 재시작
 
-```bash title="터미널 (새 창)"
-sudo docker compose up payment-api -d
-```
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell, 새 창)"
+    docker compose up payment-api -d
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널 (새 창)"
+    sudo docker compose up payment-api -d
+    ```
 
 ---
 
 ## Step 3. 단일 요청 — 얼마나 느려졌나?
 
-```bash title="터미널"
-curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
-```
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    Invoke-RestMethod http://localhost:8082/api/orders/ORD-001
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure-ascii
+    ```
 
 ```text title="출력 예시"
 {"order_id":"ORD-001", ... "total_response_time_ms":8011}
@@ -84,16 +116,32 @@ curl http://localhost:8082/api/orders/ORD-001 | python3 -m json.tool --no-ensure
 
 `hey` 부하 테스트 도구를 설치합니다.
 
-```bash title="터미널"
-sudo apt-get install -y hey 2>/dev/null || \
-  (curl -sSL https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64 -o hey && sudo install hey /usr/local/bin/hey)
-```
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    Invoke-WebRequest -Uri https://hey-release.s3.us-east-2.amazonaws.com/hey_windows_amd64 -OutFile hey.exe
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    sudo apt-get install -y hey 2>/dev/null || \
+      (curl -sSL https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64 -o hey && sudo install hey /usr/local/bin/hey)
+    ```
 
 동시 30개 요청을 총 60개 보냅니다.
 
-```bash title="터미널"
-hey -c 30 -n 60 http://localhost:8082/api/orders/ORD-001
-```
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell)"
+    .\hey.exe -c 30 -n 60 http://localhost:8082/api/orders/ORD-001
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널"
+    hey -c 30 -n 60 http://localhost:8082/api/orders/ORD-001
+    ```
 
 ```text title="출력 예시"
 Summary:
@@ -157,9 +205,17 @@ environment:
   FAULT_ERROR_RATE: "0.0"
 ```
 
-```bash title="터미널 (새 창)"
-sudo docker compose up payment-api -d
-```
+=== "Windows (PowerShell)"
+
+    ```powershell title="터미널 (Windows PowerShell, 새 창)"
+    docker compose up payment-api -d
+    ```
+
+=== "Mac / Linux"
+
+    ```bash title="터미널 (새 창)"
+    sudo docker compose up payment-api -d
+    ```
 
 ---
 
