@@ -54,7 +54,7 @@ payment-api만 재시작합니다. **새 터미널을 열고** 아래 명령을 
     - **터미널 2**: 아래 명령 실행 → payment-api만 백그라운드(`-d`)로 재시작
 
 ```bash title="터미널 (새 창)"
-sudo docker compose up --build payment-api -d
+sudo docker compose up payment-api -d
 ```
 
 ---
@@ -158,7 +158,7 @@ environment:
 ```
 
 ```bash title="터미널 (새 창)"
-sudo docker compose up --build payment-api -d
+sudo docker compose up payment-api -d
 ```
 
 ---
