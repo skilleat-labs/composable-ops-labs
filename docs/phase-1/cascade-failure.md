@@ -114,45 +114,47 @@ payment-api만 재시작합니다. **새 터미널을 열고** 아래 명령을 
 
 이제 동시 요청을 여러 개 보내서 전체가 느려지는 것을 확인합니다.
 
-`hey` 부하 테스트 도구를 설치합니다.
+부하 테스트 도구를 설치합니다.
 
 === "Windows (PowerShell)"
 
+    PowerShell에서는 별도 설치 없이 반복 요청을 보낼 수 있습니다.
+
     ```powershell title="터미널 (Windows PowerShell)"
-    Invoke-WebRequest -Uri https://hey-release.s3.us-east-2.amazonaws.com/hey_windows_amd64 -OutFile hey.exe
+    1..60 | ForEach-Object -ThrottleLimit 30 -Parallel {
+        Invoke-RestMethod http://localhost:8082/api/orders/ORD-001 | Out-Null
+    }
+    Write-Host "완료"
     ```
 
 === "Mac / Linux"
 
     ```bash title="터미널"
-    sudo apt-get install -y hey 2>/dev/null || \
-      (curl -sSL https://hey-release.s3.us-east-2.amazonaws.com/hey_linux_amd64 -o hey && sudo install hey /usr/local/bin/hey)
+    sudo apt-get install -y apache2-utils
     ```
 
 동시 30개 요청을 총 60개 보냅니다.
 
 === "Windows (PowerShell)"
 
-    ```powershell title="터미널 (Windows PowerShell)"
-    .\hey.exe -c 30 -n 60 http://localhost:8082/api/orders/ORD-001
-    ```
+    위 명령이 완료되는 데 걸린 시간을 확인합니다. 정상 시 1초 미만, 장애 시 8초 이상 걸립니다.
 
 === "Mac / Linux"
 
     ```bash title="터미널"
-    hey -c 30 -n 60 http://localhost:8082/api/orders/ORD-001
+    ab -c 30 -n 60 http://localhost:8082/api/orders/ORD-001
     ```
 
-```text title="출력 예시"
-Summary:
-  Total:        16.32 secs
-  Slowest:       8.23 secs
-  Fastest:       8.01 secs
-  Average:       8.11 secs
-  Requests/sec:  3.67
+```text title="출력 예시 (Mac / Linux)"
+Concurrency Level:      30
+Time taken for tests:   16.325 secs
+Complete requests:      60
+Failed requests:        0
 
-Status code distribution:
-  [200] 60 responses       ← 전부 성공이지만 전부 8초씩 걸림
+Percentage of the requests served within a certain time (ms)
+  50%   8011
+  75%   8015
+  100%  8023 (longest request)   ← 전부 8초씩 걸림
 ```
 
 !!! danger "이게 지난 목요일에 일어난 일"
@@ -232,8 +234,7 @@ environment:
 **근본 원인**: `timeout=None` → 스레드 점유 → 커넥션 풀 고갈
 
 !!! success "✅ 확인 포인트"
-    - `hey` 결과에서 `Slowest` 가 8초 이상인 것을 확인했다
-    - 502 에러가 발생한 것을 확인했다
+    - 부하 테스트 결과에서 응답 시간이 8초 이상인 것을 확인했다
     - 장애 설정을 `FAULT_DELAY_MS: "0"` 으로 되돌렸다
 
 !!! quote "김팀장"
