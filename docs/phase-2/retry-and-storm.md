@@ -261,7 +261,8 @@ async with httpx.AsyncClient(timeout=2.0) as client:
 @retry(
     stop=stop_after_attempt(3),       # 최대 3회 시도
     wait=wait_fixed(0.5),             # 재시도 간격 0.5초
-    retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPStatusError))
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPStatusError)),  # ← 쉼표 필수
+    reraise=True                      # 3회 실패 후 RetryError 대신 원래 예외를 그대로 던짐
 )
 async def _fetch_payment(order_id: str) -> dict:
     async with httpx.AsyncClient(timeout=2.0) as client:
@@ -269,6 +270,17 @@ async def _fetch_payment(order_id: str) -> dict:
         resp.raise_for_status()       # 503 → HTTPStatusError → 재시도 트리거
         return resp.json()
 ```
+
+!!! warning "`reraise=True` 와 쉼표를 빠뜨리지 마세요"
+    **`reraise=True`가 없으면**: tenacity가 3회 실패 후 `RetryError`로 감싸서 던집니다.
+    아래 `except httpx.HTTPStatusError`가 `RetryError`를 잡지 못해 빈 응답이 반환됩니다.
+
+    **`retry=...` 줄 끝 쉼표가 없으면**: Python 문법 오류(`SyntaxError`)로 서버가 아예 뜨지 않습니다.
+
+    ```python
+    retry=retry_if_exception_type(...),   # ← 쉼표 있어야 함
+    reraise=True                          # ← 반드시 추가
+    ```
 
 **② `get_order` 함수 안의 90~109번째 줄을 아래로 교체**
 
