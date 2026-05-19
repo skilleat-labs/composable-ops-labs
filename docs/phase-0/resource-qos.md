@@ -1,11 +1,11 @@
-# K8s 2 · Resource requests/limits & QoS
+# K8s 2-2 · QoS Class & ResourceQuota
 
 !!! info "예상 소요 30분"
 
 ---
 
 !!! quote "이대리"
-    *"requests랑 limits 헷갈리지? 간단해. requests는 '이 정도는 보장해줘', limits는 '이 이상은 절대 안 줘'. 그리고 이 둘의 관계가 QoS Class를 결정해."*
+    *"requests랑 limits 차이는 이제 알지? 그 둘의 관계가 QoS Class를 결정해. 노드 자원이 부족할 때 K8s가 어떤 Pod를 먼저 죽이냐 — 그게 QoS야."*
 
 ---
 
@@ -233,5 +233,5 @@ limits    = 피크 사용량 + 20~30% 여유
 
 ## 다음 단계
 
-[:material-arrow-left: Probe 3 · Startup](probe-startup.md){ .md-button }
+[:material-arrow-left: K8s 2 · requests & limits](resource-requests-limits.md){ .md-button }
 [K8s 3 · HPA :material-arrow-right:](hpa.md){ .md-button .md-button--primary }

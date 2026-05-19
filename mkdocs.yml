@@ -78,7 +78,8 @@ nav:
       - Probe 1 · Liveness: phase-0/probe-liveness.md
       - Probe 2 · Readiness: phase-0/probe-readiness.md
       - Probe 3 · Startup: phase-0/probe-startup.md
-      - K8s 2 · Resource & QoS: phase-0/resource-qos.md
+      - K8s 2 · requests & limits: phase-0/resource-requests-limits.md
+      - K8s 2-2 · QoS & ResourceQuota: phase-0/resource-qos.md
       - K8s 3 · HPA: phase-0/hpa.md
     - Phase 1 · 연쇄 장애의 밤:
       - Phase 1 개요: phase-1/index.md
