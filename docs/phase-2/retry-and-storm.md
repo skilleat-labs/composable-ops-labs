@@ -251,59 +251,79 @@ async with httpx.AsyncClient(timeout=2.0) as client:
 
 ### 3-3. STEP 2 — Retry 추가
 
-이번엔 파일 상단 import 블록에 tenacity를 추가하고, payment-api 호출 부분을 함수로 분리합니다.
+두 군데를 수정합니다.
 
-**① 파일 상단 import에 추가**
+**① `get_order` 함수 바로 위에 `_fetch_payment` 함수 추가**
 
-```python title="order-api/app.py — import 추가"
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
+`@app.get("/api/orders/{order_id}")` 줄 바로 위에 아래 함수를 통째로 붙여넣습니다.
+
+```python title="order-api/app.py — get_order 함수 바로 위에 추가"
+@retry(
+    stop=stop_after_attempt(3),       # 최대 3회 시도
+    wait=wait_fixed(0.5),             # 재시도 간격 0.5초
+    retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPStatusError))
+)
+async def _fetch_payment(order_id: str) -> dict:
+    async with httpx.AsyncClient(timeout=2.0) as client:
+        resp = await client.get(f"{PAYMENT_API_URL}/api/payments/{order_id}")
+        resp.raise_for_status()       # 503 → HTTPStatusError → 재시도 트리거
+        return resp.json()
 ```
 
-**② payment-api 호출 부분을 아래처럼 교체**
+**② `get_order` 함수 안의 90~109번째 줄을 아래로 교체**
 
-기존:
+지울 부분 (이 블록 전체):
 
-```python title="order-api/app.py — 수정 전"
+```python title="order-api/app.py — 이 부분을 통째로 삭제"
 async with httpx.AsyncClient(timeout=2.0) as client:
     try:
         resp = await client.get(f"{PAYMENT_API_URL}/api/payments/{order_id}")
         resp.raise_for_status()
         payment = resp.json()
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, ...)
+        raise HTTPException(
+            status_code=504,
+            detail={"error": "PAYMENT_API_TIMEOUT", "order_id": order_id},
+        )
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=502, ...)
+        raise HTTPException(
+            status_code=502,
+            detail={"error": "PAYMENT_API_ERROR", "upstream_status": e.response.status_code},
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=502,
+            detail={"error": "PAYMENT_API_UNREACHABLE", "detail": str(e)},
+        )
 ```
 
-교체 후:
+붙여넣을 내용:
 
-```python title="order-api/app.py — 수정 후"
-@retry(
-    stop=stop_after_attempt(3),                                        # 최대 3회
-    wait=wait_fixed(0.5),                                              # 재시도 간격 0.5초
-    retry=retry_if_exception_type((httpx.TimeoutException, httpx.HTTPStatusError))
-)
-async def _fetch_payment(order_id: str) -> dict:
-    async with httpx.AsyncClient(timeout=2.0) as client:
-        resp = await client.get(f"{PAYMENT_API_URL}/api/payments/{order_id}")
-        resp.raise_for_status()                                        # 503 → HTTPStatusError → 재시도
-        return resp.json()
-
+```python title="order-api/app.py — 위 블록 자리에 붙여넣기"
 try:
     payment = await _fetch_payment(order_id)
 except httpx.TimeoutException:
-    raise HTTPException(status_code=504, detail={"error": "PAYMENT_API_TIMEOUT", "order_id": order_id})
+    raise HTTPException(
+        status_code=504,
+        detail={"error": "PAYMENT_API_TIMEOUT", "order_id": order_id},
+    )
 except httpx.HTTPStatusError as e:
-    raise HTTPException(status_code=502, detail={"error": "PAYMENT_API_ERROR", "upstream_status": e.response.status_code})
+    raise HTTPException(
+        status_code=502,
+        detail={"error": "PAYMENT_API_ERROR", "upstream_status": e.response.status_code},
+    )
 except httpx.RequestError as e:
-    raise HTTPException(status_code=502, detail={"error": "PAYMENT_API_UNREACHABLE", "detail": str(e)})
+    raise HTTPException(
+        status_code=502,
+        detail={"error": "PAYMENT_API_UNREACHABLE", "detail": str(e)},
+    )
 ```
 
 !!! note "무엇이 바뀌었나?"
     ```text
-    timeout=None  → timeout=2.0   : 2초 안에 응답 없으면 포기
-    retry 3회                     : TimeoutException, HTTPStatusError 발생 시 최대 3번 재시도
-    resp.raise_for_status()       : 503 응답을 HTTPStatusError로 변환 → 재시도 트리거
+    _fetch_payment 함수 추가  : retry 데코레이터가 붙은 별도 함수로 분리
+    retry 3회                 : TimeoutException, HTTPStatusError 발생 시 최대 3번 재시도
+    resp.raise_for_status()   : 503 응답을 HTTPStatusError로 변환 → 재시도 트리거
     ```
 
 ---
