@@ -1,4 +1,4 @@
-# K8s 개념 복기 1 · Probe 설정
+# K8s 1 · Probe 설정
 
 !!! info "예상 소요 30분"
 
@@ -224,4 +224,4 @@ kubectl delete -f deploy-readiness.yaml
 ## 다음 단계
 
 [:material-arrow-left: 환경 세팅](environment-setup.md){ .md-button }
-[K8s 복기 2 · Resource & QoS :material-arrow-right:](resource-qos.md){ .md-button .md-button--primary }
+[K8s 2 · Resource & QoS :material-arrow-right:](resource-qos.md){ .md-button .md-button--primary }

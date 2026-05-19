@@ -75,9 +75,9 @@ nav:
     - Phase 0 · 복귀:
       - Phase 0 개요: phase-0/index.md
       - 환경 세팅: phase-0/environment-setup.md
-      - K8s 복기 1 · Probe: phase-0/probe.md
-      - K8s 복기 2 · Resource & QoS: phase-0/resource-qos.md
-      - K8s 복기 3 · HPA: phase-0/hpa.md
+      - K8s 1 · Probe: phase-0/probe.md
+      - K8s 2 · Resource & QoS: phase-0/resource-qos.md
+      - K8s 3 · HPA: phase-0/hpa.md
     - Phase 1 · 연쇄 장애의 밤:
       - Phase 1 개요: phase-1/index.md
       - 1-1 코드로 보는 호출 구조: phase-1/rest-call-structure.md

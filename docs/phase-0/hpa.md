@@ -1,4 +1,4 @@
-# K8s 개념 복기 3 · HPA (Horizontal Pod Autoscaler)
+# K8s 3 · HPA (Horizontal Pod Autoscaler)
 
 !!! info "예상 소요 30분"
 
@@ -236,5 +236,5 @@ kubectl delete pod load-generator --ignore-not-found
 
 ## 다음 단계
 
-[:material-arrow-left: K8s 복기 2 · Resource & QoS](resource-qos.md){ .md-button }
+[:material-arrow-left: K8s 2 · Resource & QoS](resource-qos.md){ .md-button }
 [Phase 1 · 연쇄 장애의 밤 :material-arrow-right:](../phase-1/index.md){ .md-button .md-button--primary }

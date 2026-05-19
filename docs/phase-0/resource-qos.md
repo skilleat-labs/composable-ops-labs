@@ -1,4 +1,4 @@
-# K8s 개념 복기 2 · Resource requests/limits & QoS
+# K8s 2 · Resource requests/limits & QoS
 
 !!! info "예상 소요 30분"
 
@@ -233,5 +233,5 @@ limits    = 피크 사용량 + 20~30% 여유
 
 ## 다음 단계
 
-[:material-arrow-left: K8s 복기 1 · Probe](probe.md){ .md-button }
-[K8s 복기 3 · HPA :material-arrow-right:](hpa.md){ .md-button .md-button--primary }
+[:material-arrow-left: K8s 1 · Probe](probe.md){ .md-button }
+[K8s 3 · HPA :material-arrow-right:](hpa.md){ .md-button .md-button--primary }
